@@ -1,0 +1,16 @@
+{
+  "prompt": "PPL Electric outage Pennsylvania today",
+  "sms_to": "+1XXXXXXXXXX",
+  "schedule_hours": 8,
+  "openai_apikey": "sk-proj-YOUR_OPENAI_KEY_HERE",
+  "openai_model": "gpt-4o-mini",
+  "tavily_apikey": "tvly-dev-YOUR_TAVILY_KEY_HERE",
+  "callmebot_phone": "1XXXXXXXXXX",
+  "callmebot_apikey": "YOUR_CALLMEBOT_KEY_HERE",
+  "last_run": null,
+  "last_run_status": null,
+  "last_alert_sent": null,
+  "last_summary": null,
+  "last_url": null,
+  "updated_at": null
+}

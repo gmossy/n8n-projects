@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PA Power Outage Alert — Prompt Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2e3347;
+      --accent:   #4f8ef7;
+      --accent2:  #7c3aed;
+      --green:    #22c55e;
+      --yellow:   #eab308;
+      --red:      #ef4444;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --radius:   12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: .85rem 1rem 1rem;
+    }
+
+    .container { width: 100%; max-width: 1280px; }
+
+    /* ── Two-column dashboard grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .9rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .9rem;
+    }
+    .logo {
+      width: 38px; height: 38px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo svg { width: 36px; height: 36px; filter: drop-shadow(0 0 6px rgba(79,142,247,.5)); }
+    header h1 { font-size: 1.15rem; font-weight: 700; line-height: 1.1; }
+    header p  { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+
+    /* ── Inline suggestions ── */
+    .suggestions-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .3rem;
+      margin-top: .35rem;
+    }
+    .suggestions-inline button {
+      font-size: .65rem;
+      padding: .2rem .55rem;
+      border-radius: 999px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .suggestions-inline button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(79,142,247,.07);
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .9rem 1rem;
+      margin-bottom: .75rem;
+    }
+    .card:last-child { margin-bottom: 0; }
+    .card-title {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: .6rem;
+    }
+
+    /* ── Status pills ── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .4rem;
+    }
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .4rem .55rem;
+    }
+    .stat-label { font-size: 0.6rem; color: var(--muted); margin-bottom: .15rem; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 0.8rem; font-weight: 600; }
+    .pill {
+      display: inline-flex; align-items: center; gap: .35rem;
+      font-size: 0.72rem; font-weight: 600;
+      padding: .2rem .65rem;
+      border-radius: 999px;
+    }
+    .pill-green  { background: rgba(34,197,94,.15); color: var(--green); }
+    .pill-yellow { background: rgba(234,179,8,.15);  color: var(--yellow); }
+    .pill-red    { background: rgba(239,68,68,.15);  color: var(--red); }
+    .pill-gray   { background: rgba(100,116,139,.15); color: var(--muted); }
+
+    /* ── Prompt editor ── */
+    label { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: .25rem; }
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-family: inherit;
+      padding: .5rem .7rem;
+      resize: vertical;
+      min-height: 50px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    input[type="text"], input[type="password"], select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.8rem;
+      padding: .42rem .7rem;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .field-row { margin-bottom: .55rem; }
+    .field-hint { font-size: 0.65rem; color: var(--muted); margin-top: .2rem; line-height: 1.35; }
+
+    /* ── 2-column field rows ── */
+    .field-2col { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: .5rem; margin-top: .35rem; flex-wrap: wrap; }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: .45rem .9rem;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-run {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+    }
+
+    /* ── Tip box ── */
+    .tip {
+      background: rgba(79,142,247,.08);
+      border: 1px solid rgba(79,142,247,.25);
+      border-radius: 8px;
+      padding: .85rem 1rem;
+      font-size: 0.82rem;
+      color: #93b4f7;
+      line-height: 1.55;
+    }
+    .tip strong { color: var(--accent); }
+
+    /* ── Last alert preview ── */
+    .alert-preview {
+      background: rgba(34,197,94,.07);
+      border: 1px solid rgba(34,197,94,.2);
+      border-radius: 6px;
+      padding: .55rem .7rem;
+      font-size: 0.74rem;
+      line-height: 1.45;
+    }
+    .alert-preview a { color: var(--accent); word-break: break-all; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e2537;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .65rem 1.25rem;
+      font-size: 0.85rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      transition: transform .3s;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.ok  { border-color: rgba(34,197,94,.4); color: var(--green); }
+    #toast.err { border-color: rgba(239,68,68,.4);  color: var(--red); }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: .35rem;
+    }
+
+    /* ── Diagnostics rows ── */
+    .diag-list { display: flex; flex-direction: column; gap: 0; }
+    .diag-row {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .35rem .4rem;
+      border-radius: 6px;
+      transition: background .15s;
+    }
+    .diag-row:hover { background: rgba(255,255,255,.03); }
+    .diag-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .dot-ok      { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5); }
+    .dot-warn    { background: var(--yellow); box-shadow: 0 0 6px rgba(234,179,8,.4); }
+    .dot-err     { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,.4); }
+    .dot-spin    { background: var(--accent); animation: pulse .9s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity:.4 } to { opacity:1 } }
+    .diag-body { flex: 1; min-width: 0; }
+    .diag-name { font-size: .76rem; font-weight: 500; display: block; }
+    .diag-detail { font-size: .68rem; color: var(--muted); display: block; margin-top: 0; }
+    .diag-link { font-size: .75rem; color: var(--accent); white-space: nowrap; text-decoration: none; flex-shrink: 0; }
+    .diag-link:hover { text-decoration: underline; }
+    .diag-action {
+      flex-shrink: 0;
+      font-size: .75rem;
+      font-weight: 600;
+      padding: .3rem .75rem;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .diag-action:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.07); }
+    .diag-action:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Source verification list ── */
+    .src-list { display: flex; flex-direction: column; gap: .25rem; margin-top: .5rem; }
+    .src-item {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .35rem .55rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: .72rem;
+    }
+    .src-badge {
+      flex-shrink: 0;
+      font-size: .6rem; font-weight: 700;
+      padding: .12rem .45rem;
+      border-radius: 4px;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .badge-live      { background: rgba(34,197,94,.18); color: var(--green); }
+    .badge-today     { background: rgba(34,197,94,.18); color: var(--green); }
+    .badge-yesterday { background: rgba(234,179,8,.18); color: var(--yellow); }
+    .badge-older     { background: rgba(239,68,68,.18); color: var(--red); }
+    .badge-undated   { background: rgba(100,116,139,.22); color: var(--muted); }
+    .src-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; }
+    .src-title:hover { color: var(--accent); text-decoration: underline; }
+    .src-meta { color: var(--muted); font-size: .65rem; white-space: nowrap; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <!-- Pennsylvania Keystone with bolt overlay -->
+      <svg viewBox="0 0 100 95" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Keystone shape -->
+        <path d="M15 0 H85 L100 95 H0 Z" fill="#0a2240"/>
+        <path d="M35 0 H65 L65 28 H35 Z" fill="var(--bg)"/>
+        <!-- Lightning bolt centered on keystone -->
+        <path d="M57 38 L44 58 L51 58 L43 78 L62 54 L54 54 Z" fill="#f7c94f" opacity="0.95"/>
+      </svg>
+    </div>
+    <div>
+      <h1>PA Power Outage Alert</h1>
+      <p>PPL Electric · Central &amp; Eastern Pennsylvania · Alerts via WhatsApp</p>
+    </div>
+  </header>
+
+  <div class="grid">
+   <!-- LEFT COLUMN -->
+   <div>
+
+  <!-- Status card -->
+  <div class="card">
+    <div class="card-title">Last Run Status</div>
+    <div class="status-grid">
+      <div class="stat">
+        <div class="stat-label">Status</div>
+        <div class="stat-value" id="stat-status">
+          <span class="pill pill-gray">Loading…</span>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Last Run</div>
+        <div class="stat-value" id="stat-last-run" style="color:var(--muted);font-size:.85rem">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Last Alert Sent</div>
+        <div class="stat-value" id="stat-last-alert" style="color:var(--muted);font-size:.85rem">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Schedule</div>
+        <div class="stat-value" id="stat-schedule" style="font-size:.85rem">Every 8 hours</div>
+      </div>
+    </div>
+
+    <!-- Last alert preview -->
+    <div id="alert-preview-wrap" style="display:none;margin-top:1rem">
+      <div class="alert-preview">
+        <strong style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--green)">Last Alert Sent</strong><br>
+        <span id="alert-summary"></span><br>
+        <a id="alert-url" href="#" target="_blank" rel="noopener"></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Group 1: Search Settings ── -->
+  <div class="card">
+    <div class="card-title">⚙️ Search Settings</div>
+
+    <div class="field-row">
+      <label for="prompt">Search query (sent every 8 hours)</label>
+      <textarea id="prompt" rows="2" placeholder="e.g. PPL Electric outage Pennsylvania today"></textarea>
+      <div class="suggestions-inline" id="suggestions"></div>
+    </div>
+
+    <div class="field-2col">
+      <div class="field-row" style="margin-bottom:0">
+        <label for="sms-to">WhatsApp number</label>
+        <input type="text" id="sms-to" placeholder="+1XXXXXXXXXX" />
+      </div>
+      <div class="field-row" style="margin-bottom:0">
+        <label for="openai-model">OpenAI Model</label>
+        <select id="openai-model">
+          <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
+          <option value="gpt-4o">gpt-4o</option>
+          <option value="gpt-4-turbo">gpt-4-turbo</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-hint" style="margin-top:.5rem;line-height:1.5">
+      🔍 <strong>Tavily restricted to PPL service area sources:</strong>
+      pplweb.com · omap.prod.pplweb.com (outage map) · poweroutage.us · plus regional news covering all 29 PPL counties —
+      <strong>Lehigh Valley</strong> (WFMZ, MCall, LV Live) ·
+      <strong>Poconos</strong> (Pocono Record, Pocono News Today) ·
+      <strong>NEPA / Scranton / Wilkes-Barre</strong> (WNEP, Citizens Voice, Times Tribune, Times Leader, Standard Speaker) ·
+      <strong>Harrisburg / Central</strong> (PennLive, WGAL, ABC27, FOX43) ·
+      <strong>Lancaster / York / Adams</strong> (Lancaster Online, YDR, Gettysburg Times) ·
+      <strong>Berks / Schuylkill</strong> (Reading Eagle, Republican Herald) ·
+      <strong>North Central</strong> (Sun-Gazette, Daily Item, Press Enterprise) ·
+      <strong>Chester</strong> (Daily Local)
+      <br><span style="opacity:.7">If your prompt doesn't include "PPL" or a county name, the server auto-appends PPL service-area context.</span>
+    </div>
+  </div>
+
+  <!-- ── Group 2: API Credentials ── -->
+  <div class="card">
+    <div class="card-title">🔑 API Credentials</div>
+
+    <div class="field-2col">
+      <div class="field-row">
+        <label for="openai-apikey">OpenAI API Key</label>
+        <input type="password" id="openai-apikey" placeholder="sk-proj-..." autocomplete="off" />
+      </div>
+      <div class="field-row">
+        <label for="tavily-apikey">Tavily API Key</label>
+        <input type="password" id="tavily-apikey" placeholder="tvly-..." autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="field-row">
+      <label for="callmebot-apikey">CallMeBot API Key (WhatsApp)</label>
+      <div style="display:flex;gap:.4rem;align-items:center">
+        <input type="text" id="callmebot-apikey" placeholder="e.g. 1234567" style="flex:1" />
+        <button class="btn-secondary" id="btn-test-wa" title="Send a test WhatsApp message now" style="white-space:nowrap">📲 Test</button>
+      </div>
+      <div class="field-hint">Free: save <strong>+34 623 78 64 49</strong> → send <em>"I allow callmebot to send me messages"</em> → they reply with your key.</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="btn-save">Save All Settings</button>
+      <button class="btn-secondary" id="btn-reset">Reset</button>
+    </div>
+  </div>
+
+   </div><!-- /LEFT COLUMN -->
+
+   <!-- RIGHT COLUMN -->
+   <div>
+
+  <!-- Testing & Status card -->
+  <div class="card">
+    <div class="card-title">System Status &amp; Testing</div>
+
+    <!-- Status rows -->
+    <div class="diag-list">
+
+      <div class="diag-row" id="drow-n8n">
+        <span class="diag-dot" id="dot-n8n"></span>
+        <div class="diag-body">
+          <span class="diag-name">n8n workflow engine</span>
+          <span class="diag-detail" id="detail-n8n">Checking…</span>
+        </div>
+        <a href="http://localhost:5678" target="_blank" rel="noopener" class="diag-link" id="link-n8n" style="display:none">Open n8n ↗</a>
+      </div>
+
+      <div class="diag-row" id="drow-workflow">
+        <span class="diag-dot" id="dot-workflow"></span>
+        <div class="diag-body">
+          <span class="diag-name">Scheduled workflow (every 8h)</span>
+          <span class="diag-detail" id="detail-workflow">Checking…</span>
+        </div>
+        <button class="diag-action" id="btn-activate" style="display:none">Activate</button>
+      </div>
+
+      <div class="diag-row" id="drow-keys">
+        <span class="diag-dot" id="dot-keys"></span>
+        <div class="diag-body">
+          <span class="diag-name">API keys</span>
+          <span class="diag-detail" id="detail-keys">Checking…</span>
+        </div>
+      </div>
+
+      <div class="diag-row" id="drow-wa">
+        <span class="diag-dot" id="dot-wa" style="background:var(--muted)"></span>
+        <div class="diag-body">
+          <span class="diag-name">WhatsApp (CallMeBot)</span>
+          <span class="diag-detail" id="detail-wa">Not tested yet</span>
+        </div>
+        <button class="diag-action" id="btn-test-wa-diag">Send Test</button>
+      </div>
+
+    </div><!-- /.diag-list -->
+
+    <!-- Advanced: webhook URL (collapsed by default) -->
+    <details style="margin-top:.75rem">
+      <summary style="font-size:.75rem;color:var(--muted);cursor:pointer;user-select:none">Advanced — webhook URL</summary>
+      <div style="margin-top:.5rem">
+        <input type="text" id="n8n-url"
+          placeholder="http://localhost:5678/webhook/run-news-alert"
+          value="http://localhost:5678/webhook/run-news-alert"
+          style="font-size:.8rem" />
+        <div class="field-hint">Used by the ▶ Run Now button. Must match the webhook path in n8n.</div>
+      </div>
+    </details>
+
+    <!-- Action buttons -->
+    <div class="btn-row" style="margin-top:1.25rem">
+      <button class="btn-run" id="btn-run">▶ Run Now</button>
+      <button class="btn-secondary" id="btn-test-full" style="border-color:rgba(79,142,247,.4);color:var(--accent)">🔍 Full Search Test</button>
+      <button class="btn-secondary" id="btn-refresh-diag" title="Refresh status" style="padding:.65rem .9rem">↻</button>
+    </div>
+
+    <!-- Progress / result output -->
+    <div id="run-result" style="display:none;margin-top:.6rem"></div>
+    <div id="test-result-panel" style="display:none;margin-top:.6rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.7rem .85rem;font-size:.75rem;line-height:1.55">
+      <div id="test-result-content"></div>
+    </div>
+
+    <!-- Recent search log (collapsible) -->
+    <details style="margin-top:.7rem" id="logs-details">
+      <summary style="font-size:.72rem;color:var(--muted);cursor:pointer;user-select:none;display:flex;align-items:center;gap:.5rem">
+        <span>📜 Recent searches</span>
+        <span id="logs-count" style="font-size:.65rem;background:rgba(100,116,139,.2);padding:.05rem .4rem;border-radius:999px"></span>
+        <button class="diag-action" id="btn-refresh-logs" title="Refresh log" style="margin-left:auto;font-size:.65rem;padding:.15rem .55rem">↻</button>
+        <button class="diag-action" id="btn-clear-logs" title="Clear log" style="font-size:.65rem;padding:.15rem .55rem">Clear</button>
+      </summary>
+      <div id="logs-list" style="margin-top:.5rem;max-height:340px;overflow-y:auto"></div>
+    </details>
+  </div>
+
+   </div><!-- /RIGHT COLUMN -->
+  </div><!-- /.grid -->
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+const API = ''   // same origin
+
+const suggestions = [
+  // ── PPL-specific (central & eastern PA) ──────────────────────────────────
+  'PPL Electric outage Pennsylvania today',
+  'PPL Electric Utilities power outage Lehigh Valley Allentown Bethlehem',
+  'PPL Electric outage Scranton Wilkes-Barre Hazleton northeastern Pennsylvania',
+  'PPL Electric outage Harrisburg Lancaster York central Pennsylvania',
+  'PPL Electric outage Poconos Monroe Carbon Pike Wayne county Pennsylvania',
+  'PPL Electric restoration update Berks Schuylkill Luzerne county Pennsylvania',
+  'PPL Electric storm damage outage customers affected Pennsylvania',
+  // ── Broader PA ───────────────────────────────────────────────────────────
+  'Pennsylvania electricity power outage news today',
+  'Pennsylvania severe weather power outage emergency',
+]
+
+let savedConfig = {}
+
+/* ── Toast ── */
+function toast(msg, type = 'ok', ms = 3000) {
+  const el = document.getElementById('toast')
+  el.textContent = msg
+  el.className = `show ${type}`
+  clearTimeout(el._t)
+  el._t = setTimeout(() => { el.className = '' }, ms)
+}
+
+/* ── Format date ── */
+function fmtDate(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, {
+    month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
+
+/* ── Load config ── */
+async function loadConfig() {
+  try {
+    const r = await fetch(`${API}/api/config`)
+    const cfg = await r.json()
+    savedConfig = cfg
+
+    document.getElementById('prompt').value           = cfg.prompt           || ''
+    document.getElementById('sms-to').value           = cfg.sms_to           || ''
+    document.getElementById('openai-apikey').value    = cfg.openai_apikey    || ''
+    document.getElementById('openai-model').value     = cfg.openai_model     || 'gpt-4o-mini'
+    document.getElementById('tavily-apikey').value    = cfg.tavily_apikey    || ''
+    document.getElementById('callmebot-apikey').value = cfg.callmebot_apikey || ''
+
+    // status card
+    const statusEl = document.getElementById('stat-status')
+    const s = cfg.last_run_status
+    if (s === 'alert_sent') {
+      statusEl.innerHTML = '<span class="pill pill-green">✓ Alert sent</span>'
+    } else if (s === 'no_news') {
+      statusEl.innerHTML = '<span class="pill pill-gray">No news</span>'
+    } else if (s === 'error') {
+      statusEl.innerHTML = '<span class="pill pill-red">Error</span>'
+    } else {
+      statusEl.innerHTML = '<span class="pill pill-gray">Never run</span>'
+    }
+
+    document.getElementById('stat-last-run').textContent   = fmtDate(cfg.last_run)
+    document.getElementById('stat-last-alert').textContent = fmtDate(cfg.last_alert_sent)
+    document.getElementById('stat-schedule').textContent   = `Every ${cfg.schedule_hours || 8} hours`
+
+    if (cfg.last_summary) {
+      document.getElementById('alert-preview-wrap').style.display = 'block'
+      document.getElementById('alert-summary').textContent = cfg.last_summary
+      const link = document.getElementById('alert-url')
+      link.href = cfg.last_url || '#'
+      link.textContent = cfg.last_url || ''
+    }
+  } catch (e) {
+    console.error('Could not load config:', e)
+  }
+}
+
+/* ── Save config ── */
+document.getElementById('btn-save').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-save')
+  const prompt           = document.getElementById('prompt').value.trim()
+  const sms_to           = document.getElementById('sms-to').value.trim()
+  const openai_apikey    = document.getElementById('openai-apikey').value.trim()
+  const openai_model     = document.getElementById('openai-model').value
+  const tavily_apikey    = document.getElementById('tavily-apikey').value.trim()
+  const callmebot_apikey = document.getElementById('callmebot-apikey').value.trim()
+  if (!prompt) return toast('Prompt cannot be empty', 'err')
+
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span>Saving…'
+  try {
+    const r = await fetch(`${API}/api/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, sms_to, openai_apikey, openai_model, tavily_apikey, callmebot_apikey })
+    })
+    if (!r.ok) throw new Error(await r.text())
+    savedConfig.prompt = prompt
+    savedConfig.sms_to = sms_to
+    toast('✓ Configuration saved')
+  } catch (e) {
+    toast(`Error: ${e.message}`, 'err')
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Save Changes'
+  }
+})
+
+/* ── Reset ── */
+document.getElementById('btn-reset').addEventListener('click', () => {
+  document.getElementById('prompt').value = savedConfig.prompt || ''
+  document.getElementById('sms-to').value = savedConfig.sms_to || ''
+  toast('Reset to saved values')
+})
+
+/* ── Suggestions ── */
+const suggestionsEl = document.getElementById('suggestions')
+suggestions.forEach(s => {
+  const btn = document.createElement('button')
+  btn.textContent = s
+  btn.addEventListener('click', () => {
+    document.getElementById('prompt').value = s
+    toast('Prompt loaded — hit Save to apply')
+  })
+  suggestionsEl.appendChild(btn)
+})
+
+/* ── Run now (bypasses n8n — calls server directly) ── */
+document.getElementById('btn-run').addEventListener('click', async () => {
+  const btn   = document.getElementById('btn-run')
+  const resEl = document.getElementById('run-result')
+
+  // Save current form values first so the server runs against the latest config
+  const savePayload = {
+    prompt:           document.getElementById('prompt').value.trim(),
+    sms_to:           document.getElementById('sms-to').value.trim(),
+    openai_apikey:    document.getElementById('openai-apikey').value.trim(),
+    openai_model:     document.getElementById('openai-model').value,
+    tavily_apikey:    document.getElementById('tavily-apikey').value.trim(),
+    callmebot_apikey: document.getElementById('callmebot-apikey').value.trim()
+  }
+  if (!savePayload.prompt) return toast('Enter a search prompt first', 'err')
+
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span>Running…'
+  resEl.style.display = 'block'
+  resEl.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.85rem 1rem;font-size:.8rem;color:var(--muted);line-height:1.7">
+    <div id="rs-1">⏳ Saving config…</div>
+    <div id="rs-2" style="opacity:.4">⏳ Searching Tavily…</div>
+    <div id="rs-3" style="opacity:.4">⏳ Analyzing with OpenAI…</div>
+    <div id="rs-4" style="opacity:.4">⏳ Sending to WhatsApp…</div>
+  </div>`
+
+  try {
+    await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(savePayload)
+    })
+    document.getElementById('rs-1').innerHTML = '✅ Config saved'
+    document.getElementById('rs-2').style.opacity = '1'
+
+    // Fire the full run — this does Tavily + OpenAI + WhatsApp on the server
+    const r    = await fetch('/api/test-full-run', { method: 'POST' })
+    const data = await r.json()
+
+    if (data.ok) {
+      const breakdown = (data.liveCount !== undefined) ? ` (🔴 ${data.liveCount} live · 📰 ${data.newsCount} fresh news)` : ''
+      document.getElementById('rs-2').innerHTML = `✅ Found ${data.resultCount} results${breakdown}`
+      document.getElementById('rs-3').innerHTML = '✅ Summary generated'
+      document.getElementById('rs-4').innerHTML = '✅ WhatsApp sent — check your phone'
+      const badgeLabel = { live: '🔴 LIVE', today: '✓ TODAY', yesterday: '✓ YESTERDAY', older: '⚠ OLDER', undated: '? UNDATED' }
+      const srcListHtml = (data.sources && data.sources.length) ? `
+        <div style="margin-top:.6rem;color:var(--muted);font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Sources verified current</div>
+        <div class="src-list">
+          ${data.sources.map(s => `
+            <div class="src-item">
+              <span class="src-badge badge-${s.currency}">${badgeLabel[s.currency] || s.currency}</span>
+              <a class="src-title" href="${s.url}" target="_blank" rel="noopener" title="${s.title}">${s.title}</a>
+              <span class="src-meta">${s.region ? '🗺️ ' + s.region.replace(/_/g,' ') + ' · ' : ''}${s.domain}${s.publishedDate ? ' · ' + s.publishedDate.slice(0,10) : ''}</span>
+            </div>`).join('')}
+        </div>` : ''
+
+      const fbBanner = data.usedFallback ? `<div style="margin-bottom:.5rem;padding:.4rem .6rem;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:6px;font-size:.72rem;color:var(--yellow)">${data.fallbackNote || '🔄 Using Google News RSS fallback'}</div>` : ''
+      resEl.innerHTML += `<div style="margin-top:.85rem;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:.85rem 1rem;font-size:.82rem;line-height:1.6">
+        ${fbBanner}
+        <div style="color:var(--green);font-weight:600;margin-bottom:.35rem">📲 Message sent!</div>
+        <div style="color:var(--text)">${data.summary}</div>
+        ${data.topUrl ? `<a href="${data.topUrl}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.78rem;display:block;margin-top:.4rem;word-break:break-all">📰 ${data.topUrl}</a>` : ''}
+        ${data.countyLink ? `<a href="${data.countyLink}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.78rem;display:block;margin-top:.2rem;word-break:break-all">📍 ${data.county} County live outages</a>` : ''}
+        ${data.liveAlerts ? `<a href="${data.liveAlerts}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.78rem;display:block;margin-top:.2rem;word-break:break-all">🚨 ${data.liveAlerts}</a>` : ''}
+        ${srcListHtml}
+      </div>`
+      toast('📲 Run complete — WhatsApp sent!')
+    } else {
+      const stepLabels = { config: '⚙️ Config', tavily: '🔍 Tavily', openai: '🤖 OpenAI', whatsapp: '📲 WhatsApp' }
+      const stepIdx    = { tavily: 2, openai: 3, whatsapp: 4 }[data.step] || 0
+      if (stepIdx) document.getElementById('rs-' + stepIdx).innerHTML = `❌ ${stepLabels[data.step]} failed`
+      resEl.innerHTML += `<div style="margin-top:.85rem;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:.85rem 1rem;font-size:.82rem;color:var(--red)">
+        <strong>${stepLabels[data.step] || 'Error'}:</strong> ${data.error}
+      </div>`
+      toast(`${stepLabels[data.step] || 'Error'} failed`, 'err', 5000)
+    }
+
+    setTimeout(loadConfig, 1500)
+  } catch (e) {
+    toast(`Request failed: ${e.message}`, 'err', 5000)
+    resEl.innerHTML += `<div style="margin-top:.85rem;color:var(--red);font-size:.82rem">❌ ${e.message}</div>`
+  } finally {
+    btn.disabled = false
+    btn.textContent = '▶ Run Now'
+  }
+})
+
+/* ── Test WhatsApp ── */
+document.getElementById('btn-test-wa').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-test-wa')
+  const apiKey = document.getElementById('callmebot-apikey').value.trim()
+  if (!apiKey) return toast('Enter your CallMeBot API key first', 'err')
+
+  // Save the key first so the server uses the latest value
+  await fetch(`${API}/api/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt:           document.getElementById('prompt').value.trim(),
+      sms_to:           document.getElementById('sms-to').value.trim(),
+      openai_apikey:    document.getElementById('openai-apikey').value.trim(),
+      openai_model:     document.getElementById('openai-model').value,
+      tavily_apikey:    document.getElementById('tavily-apikey').value.trim(),
+      callmebot_apikey: apiKey
+    })
+  })
+
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span>'
+  try {
+    const r    = await fetch(`${API}/api/test-whatsapp`, { method: 'POST' })
+    const data = await r.json()
+    if (data.ok) {
+      toast('📲 Test message sent! Check your WhatsApp.')
+    } else {
+      toast(`WhatsApp error: ${data.error}`, 'err', 6000)
+    }
+  } catch (e) {
+    toast(`Request failed: ${e.message}`, 'err')
+  } finally {
+    btn.disabled = false
+    btn.textContent = '📲 Test'
+  }
+})
+
+/* ── Test Full Search ── */
+document.getElementById('btn-test-full').addEventListener('click', async () => {
+  const btn   = document.getElementById('btn-test-full')
+  const panel = document.getElementById('test-result-panel')
+  const content = document.getElementById('test-result-content')
+
+  // Save current config first so server uses latest prompt + keys
+  const savePayload = {
+    prompt:           document.getElementById('prompt').value.trim(),
+    sms_to:           document.getElementById('sms-to').value.trim(),
+    openai_apikey:    document.getElementById('openai-apikey').value.trim(),
+    openai_model:     document.getElementById('openai-model').value,
+    tavily_apikey:    document.getElementById('tavily-apikey').value.trim(),
+    callmebot_apikey: document.getElementById('callmebot-apikey').value.trim()
+  }
+  if (!savePayload.prompt) return toast('Enter a search prompt first', 'err')
+
+  await fetch(`${API}/api/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(savePayload)
+  })
+
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span>Searching…'
+  panel.style.display = 'none'
+
+  try {
+    const r    = await fetch(`${API}/api/test-full-run`, { method: 'POST' })
+    const data = await r.json()
+
+    panel.style.display = 'block'
+
+    if (data.ok) {
+      panel.style.borderColor = 'rgba(34,197,94,.3)'
+      content.innerHTML = `
+        <div style="color:var(--green);font-weight:600;margin-bottom:.5rem">✅ ${data.message}</div>
+        <div style="color:var(--muted);margin-bottom:.25rem">Prompt: <span style="color:var(--text)">${data.prompt}</span></div>
+        <div style="color:var(--muted);margin-bottom:.25rem">Results found: <span style="color:var(--text)">${data.resultCount}</span></div>
+        <div style="color:var(--muted);margin-bottom:.25rem">Summary sent to WhatsApp:</div>
+        <div style="color:var(--text);background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:.6rem .8rem;margin-top:.25rem">${data.summary}</div>
+        ${data.topUrl ? `<a href="${data.topUrl}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.78rem;display:block;margin-top:.4rem;word-break:break-all">${data.topUrl}</a>` : ''}
+      `
+      toast('📲 Full test sent to WhatsApp!')
+    } else {
+      panel.style.borderColor = 'rgba(239,68,68,.3)'
+      const stepLabels = { config: '⚙️ Config', tavily: '🔍 Tavily Search', whatsapp: '📲 WhatsApp', openai: '🤖 OpenAI' }
+      const stepLabel  = stepLabels[data.step] || data.step || 'Error'
+      content.innerHTML = `
+        <div style="color:var(--red);font-weight:600;margin-bottom:.4rem">${stepLabel} failed</div>
+        <div style="color:var(--muted)">${data.error}</div>
+        ${data.summary ? `<div style="color:var(--muted);margin-top:.5rem">Partial result: <span style="color:var(--text)">${data.summary}</span></div>` : ''}
+      `
+      toast(`${stepLabel} failed`, 'err', 5000)
+    }
+  } catch (e) {
+    toast('Request failed: ' + e.message, 'err')
+  } finally {
+    btn.disabled = false
+    btn.textContent = '🔍 Test Full Search'
+  }
+})
+
+/* ── Diagnostics ── */
+async function runDiagnostics() {
+  // n8n + workflow check
+  setDot('n8n', 'spin'); setDetail('n8n', 'Checking…')
+  setDot('workflow', 'spin'); setDetail('workflow', 'Checking…')
+
+  try {
+    const r = await fetch('/api/n8n-status')
+    const d = await r.json()
+
+    if (!d.n8nUp) {
+      setDot('n8n', 'err'); setDetail('n8n', 'Not reachable — is Docker running?')
+      setDot('workflow', 'err'); setDetail('workflow', 'Cannot check — n8n is down')
+      document.getElementById('link-n8n').style.display = ''
+    } else {
+      setDot('n8n', 'ok'); setDetail('n8n', 'Running at localhost:5678')
+      document.getElementById('link-n8n').style.display = ''
+
+      if (d.apiError) {
+        setDot('workflow', 'warn')
+        setDetail('workflow', 'Cannot check via API — activate manually in n8n')
+        showActivateBtn(false)
+        document.getElementById('btn-activate').style.display = ''
+        document.getElementById('btn-activate').textContent = 'Open n8n ↗'
+        document.getElementById('btn-activate').onclick = () => window.open('http://localhost:5678','_blank')
+      } else if (d.workflowActive === true) {
+        setDot('workflow', 'ok'); setDetail('workflow', 'Active — checking every 8 hours')
+        showActivateBtn(false)
+      } else if (d.workflowActive === false) {
+        setDot('workflow', 'err'); setDetail('workflow', 'Inactive — webhook won\'t respond until activated')
+        showActivateBtn(true)
+      } else {
+        setDot('workflow', 'warn'); setDetail('workflow', 'Status unknown')
+      }
+    }
+  } catch (e) {
+    setDot('n8n', 'err'); setDetail('n8n', 'Request failed: ' + e.message)
+    setDot('workflow', 'err'); setDetail('workflow', '—')
+  }
+
+  // API keys check
+  const cfg = savedConfig
+  const missing = []
+  if (!cfg.tavily_apikey)    missing.push('Tavily')
+  if (!cfg.openai_apikey)    missing.push('OpenAI')
+  if (!cfg.callmebot_apikey) missing.push('CallMeBot')
+
+  if (missing.length === 0) {
+    setDot('keys', 'ok'); setDetail('keys', 'Tavily, OpenAI & CallMeBot all configured ✓')
+  } else if (missing.length === 3) {
+    setDot('keys', 'err'); setDetail('keys', 'No API keys set — fill them in above and Save')
+  } else {
+    setDot('keys', 'warn'); setDetail('keys', `Missing: ${missing.join(', ')} — add above and Save`)
+  }
+}
+
+function setDot(id, state) {
+  const el = document.getElementById('dot-' + id)
+  el.className = 'diag-dot' + (state ? ' dot-' + state : '')
+}
+function setDetail(id, txt) {
+  document.getElementById('detail-' + id).textContent = txt
+}
+function showActivateBtn(show) {
+  document.getElementById('btn-activate').style.display = show ? '' : 'none'
+}
+
+/* ── Activate workflow ── */
+document.getElementById('btn-activate').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-activate')
+  btn.disabled = true
+  btn.textContent = 'Activating…'
+  setDot('workflow', 'spin'); setDetail('workflow', 'Sending activate request…')
+
+  try {
+    const r = await fetch('/api/activate-workflow', { method: 'POST' })
+    const d = await r.json()
+    if (d.ok) {
+      setDot('workflow', 'ok')
+      setDetail('workflow', d.alreadyActive ? 'Already active ✓' : 'Activated successfully ✓')
+      showActivateBtn(false)
+      toast('✓ Workflow activated!')
+    } else if (d.needsManual) {
+      setDot('workflow', 'warn')
+      setDetail('workflow', 'Activate manually — click Open n8n ↗')
+      btn.textContent = 'Open n8n ↗'
+      btn.disabled = false
+      btn.onclick = () => window.open('http://localhost:5678', '_blank')
+      toast(d.error, 'err', 7000)
+    } else {
+      setDot('workflow', 'err'); setDetail('workflow', d.error || 'Activation failed')
+      btn.textContent = 'Retry'
+      btn.disabled = false
+      toast('Activation failed: ' + (d.error || ''), 'err', 5000)
+    }
+  } catch (e) {
+    setDot('workflow', 'err'); setDetail('workflow', 'Request failed')
+    btn.textContent = 'Retry'
+    btn.disabled = false
+    toast('Request failed: ' + e.message, 'err')
+  }
+})
+
+/* ── WhatsApp test (diagnostics row) ── */
+document.getElementById('btn-test-wa-diag').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-test-wa-diag')
+  const apiKey = document.getElementById('callmebot-apikey').value.trim()
+  if (!apiKey) {
+    toast('Enter your CallMeBot API key in the settings above first', 'err', 5000)
+    return
+  }
+
+  // Save latest config first
+  await fetch('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt:           document.getElementById('prompt').value.trim(),
+      sms_to:           document.getElementById('sms-to').value.trim(),
+      openai_apikey:    document.getElementById('openai-apikey').value.trim(),
+      openai_model:     document.getElementById('openai-model').value,
+      tavily_apikey:    document.getElementById('tavily-apikey').value.trim(),
+      callmebot_apikey: apiKey
+    })
+  })
+
+  btn.disabled = true
+  btn.textContent = 'Sending…'
+  setDot('wa', 'spin'); setDetail('wa', 'Sending test message…')
+
+  try {
+    const r    = await fetch('/api/test-whatsapp', { method: 'POST' })
+    const data = await r.json()
+    if (data.ok) {
+      setDot('wa', 'ok'); setDetail('wa', 'Test message sent — check your WhatsApp ✓')
+      btn.textContent = 'Send Again'
+      toast('📲 Test message sent!')
+    } else {
+      setDot('wa', 'err'); setDetail('wa', 'Failed: ' + (data.error || 'unknown error'))
+      btn.textContent = 'Retry'
+      toast('WhatsApp error: ' + data.error, 'err', 6000)
+    }
+  } catch (e) {
+    setDot('wa', 'err'); setDetail('wa', 'Request failed')
+    btn.textContent = 'Retry'
+    toast('Request failed: ' + e.message, 'err')
+  } finally {
+    btn.disabled = false
+  }
+})
+
+/* ── Refresh button ── */
+document.getElementById('btn-refresh-diag').addEventListener('click', runDiagnostics)
+
+/* ── Recent search log ── */
+const OUTCOME_LABEL = {
+  alert_sent:         { icon: '📲', color: 'var(--green)',  text: 'Alert sent' },
+  no_current_outage:  { icon: 'ℹ️', color: 'var(--muted)',  text: 'No current outage' },
+  no_results:         { icon: '∅',  color: 'var(--muted)',  text: 'No results' },
+  tavily_error:       { icon: '❌', color: 'var(--red)',    text: 'Tavily error' },
+  whatsapp_error:     { icon: '❌', color: 'var(--red)',    text: 'WhatsApp error' }
+}
+const CURRENCY_BADGE = { live:'badge-live', today:'badge-today', yesterday:'badge-yesterday', older:'badge-older', undated:'badge-undated' }
+
+async function loadLogs() {
+  try {
+    const r = await fetch('/api/logs?limit=50')
+    const d = await r.json()
+    document.getElementById('logs-count').textContent = `${d.total} total`
+    const list = document.getElementById('logs-list')
+    if (!d.logs.length) { list.innerHTML = '<div style="color:var(--muted);font-size:.72rem;padding:.5rem">No searches logged yet. Hit ▶ Run Now to record one.</div>'; return }
+
+    list.innerHTML = d.logs.map(e => {
+      const out = OUTCOME_LABEL[e.outcome] || { icon:'?', color:'var(--muted)', text:e.outcome||'?' }
+      const ts  = new Date(e.timestamp).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })
+      const srcHtml = (e.sources || []).map(s => `
+        <div class="src-item" style="font-size:.68rem;padding:.25rem .45rem">
+          <span class="src-badge ${CURRENCY_BADGE[s.currency]||'badge-undated'}" style="font-size:.55rem">${(s.currency||'?').toUpperCase()}</span>
+          <a class="src-title" href="${s.url}" target="_blank" rel="noopener">${(s.title||'').replace(/</g,'&lt;')}</a>
+          <span class="src-meta">${s.domain||''}${s.publishedDate ? ' · ' + s.publishedDate.slice(0,10) : ''}</span>
+        </div>`).join('')
+
+      return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.55rem .7rem;margin-bottom:.4rem;font-size:.72rem;line-height:1.4">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+          <span style="color:${out.color};font-weight:600">${out.icon} ${out.text}</span>
+          <span style="color:var(--muted);font-size:.65rem">${ts}</span>
+        </div>
+        <div style="color:var(--muted);margin-top:.2rem">prompt: <span style="color:var(--text)">${(e.prompt||'').substring(0,90).replace(/</g,'&lt;')}</span></div>
+        ${e.summary ? `<div style="color:var(--text);margin-top:.2rem">${e.summary.substring(0,200).replace(/</g,'&lt;')}</div>` : ''}
+        ${e.error   ? `<div style="color:var(--red);margin-top:.2rem;font-size:.68rem">${e.error.substring(0,200).replace(/</g,'&lt;')}</div>` : ''}
+        ${e.resultCount !== undefined ? `<div style="color:var(--muted);margin-top:.2rem;font-size:.65rem">${e.resultCount} results — 🔴 ${e.liveCount||0} live · 📰 ${e.newsCount||0} news${e.county ? ' · 📍 '+e.county : ''}</div>` : ''}
+        ${srcHtml ? `<div class="src-list" style="margin-top:.4rem;gap:.15rem">${srcHtml}</div>` : ''}
+      </div>`
+    }).join('')
+  } catch (e) { console.error('Could not load logs:', e) }
+}
+
+document.getElementById('btn-refresh-logs').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); loadLogs() })
+document.getElementById('btn-clear-logs').addEventListener('click', async (e) => {
+  e.preventDefault(); e.stopPropagation()
+  if (!confirm('Clear all search logs?')) return
+  await fetch('/api/logs', { method: 'DELETE' })
+  loadLogs()
+  toast('Logs cleared')
+})
+// Auto-load when the panel is opened
+document.getElementById('logs-details').addEventListener('toggle', (e) => { if (e.target.open) loadLogs() })
+// Initial load (so the count is populated even when collapsed)
+loadLogs()
+
+/* ── Init ── */
+loadConfig().then(runDiagnostics)
+setInterval(loadConfig, 30000)
+setInterval(runDiagnostics, 30000)
+</script>
+</body>
+</html>

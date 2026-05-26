@@ -1,0 +1,56 @@
+{
+  "id": "test-whatsapp-workflow",
+  "name": "📲 Test WhatsApp Alert",
+  "nodes": [
+    {
+      "id": "node-manual-001",
+      "name": "Click to Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "node-test-002",
+      "name": "Send Test WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300],
+      "parameters": {
+        "jsCode": "// ── Reads CallMeBot credentials from the config server ───────────────────\n// Edit credentials at http://localhost:3200\n\nlet config = {};\nfor (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n  try {\n    const r = await fetch(`${base}/api/config`);\n    config = await r.json();\n    console.log(`Config loaded from ${base}`);\n    break;\n  } catch (_) {}\n}\n\nconst phone  = config.callmebot_phone  || '';\nconst apiKey = config.callmebot_apikey || '';\n\nif (!phone || !apiKey) {\n  return [{ json: {\n    ok: false,\n    error: 'callmebot_phone or callmebot_apikey not set. Go to http://localhost:3200 to configure.'\n  }}];\n}\n\nconst message    = encodeURIComponent('✅ PA Power Alert — Test message from n8n. WhatsApp notifications are working!');\nconst endpoint   = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${message}&apikey=${apiKey}`;\n\ntry {\n  const res  = await fetch(endpoint);\n  const body = await res.text();\n\n  if (body.toLowerCase().includes('error')) {\n    console.error('CallMeBot error:', body);\n    return [{ json: { ok: false, error: body.substring(0, 300) } }];\n  }\n\n  console.log('✅ Test WhatsApp sent to', phone);\n  return [{ json: { ok: true, message: 'Test WhatsApp sent!', to: phone } }];\n\n} catch (e) {\n  console.error('Fetch failed:', e.message);\n  return [{ json: { ok: false, error: e.message } }];\n}"
+      }
+    },
+    {
+      "id": "node-result-003",
+      "name": "Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [720, 300],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "fields": {
+          "values": []
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Click to Test": {
+      "main": [[{ "node": "Send Test WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Send Test WhatsApp": {
+      "main": [[{ "node": "Result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "test-whatsapp-v1"
+  }
+}

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.local
+
+# Live config contains API keys — use config.example.json as template
+config.json
+
+# Search/run logs are runtime data
+logs/*.jsonl
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp

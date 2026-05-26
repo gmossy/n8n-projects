@@ -1,0 +1,139 @@
+{
+  "id": "pa-power-outage-news-alert",
+  "name": "PA Power Outage News Alert",
+  "nodes": [
+    {
+      "id": "node-sched-001",
+      "name": "Every 8 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 280],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 8
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-hook-002",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [200, 460],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "run-news-alert",
+        "responseMode": "lastNode",
+        "responseData": "allEntries"
+      },
+      "webhookId": "b7f3a1c2-d4e5-4f60-9a1b-run-news-alert"
+    },
+    {
+      "id": "node-analyze-003",
+      "name": "Search & Analyze",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 360],
+      "parameters": {
+        "jsCode": "// ── All config comes from the frontend server — edit at http://localhost:3200 ──\n\n// STEP 1 — Load config (try Docker service name first, then localhost)\nlet config = {};\nfor (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n  try {\n    const r = await fetch(`${base}/api/config`);\n    config = await r.json();\n    break;\n  } catch (_) {}\n}\n\nconst prompt     = (config.prompt      || 'PPL Electric outage Pennsylvania today Lehigh Valley Scranton Harrisburg Lancaster').trim();\nconst smsTo      = config.sms_to       || '+1XXXXXXXXXX';\nconst TAVILY_KEY = config.tavily_apikey || '';\nconst OPENAI_KEY = config.openai_apikey || '';\nconst OPENAI_MODEL = config.openai_model || 'gpt-4o-mini';\n\nif (!TAVILY_KEY) {\n  await updateStatus({ sent: false, error: 'Tavily API key not set — add it at http://localhost:3200' });\n  return [{ json: { shouldAlert: false, reason: 'Missing Tavily key' } }];\n}\nif (!OPENAI_KEY) {\n  await updateStatus({ sent: false, error: 'OpenAI API key not set — add it at http://localhost:3200' });\n  return [{ json: { shouldAlert: false, reason: 'Missing OpenAI key' } }];\n}\n\n// STEP 2 — Tavily web search\nlet searchData = { results: [], answer: '' };\ntry {\n  const tavilyRes = await fetch('https://api.tavily.com/search', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${TAVILY_KEY}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ query: prompt, search_depth: 'advanced', max_results: 10, include_answer: true, include_raw_content: false, include_domains: ['pplweb.com','omap.prod.pplweb.com','poweroutage.us','wfmz.com','lehighvalleylive.com','mcall.com','pocononewstoday.com','pocono-record.com','wnep.com','citizensvoice.com','thetimes-tribune.com','timesleader.com','standardspeaker.com','pennlive.com','wgal.com','abc27.com','fox43.com','lancasteronline.com','ydr.com','gettysburgtimes.com','readingeagle.com','republicanherald.com','pressenterpriseonline.com','dailyitem.com','sungazette.com','pahomepage.com','dailylocal.com'] })\n  });\n  searchData = await tavilyRes.json();\n} catch (e) {\n  await updateStatus({ sent: false, error: 'Tavily failed: ' + e.message });\n  return [{ json: { shouldAlert: false, reason: 'Tavily error: ' + e.message, smsTo } }];\n}\n\nconst results = searchData.results || [];\nconst answer  = searchData.answer  || '';\n\nif (results.length === 0) {\n  await updateStatus({ sent: false, summary: 'No search results found' });\n  return [{ json: { shouldAlert: false, reason: 'No Tavily results', smsTo } }];\n}\n\n// STEP 3 — OpenAI analysis\nconst resultsText = results.map((r, i) =>\n  `[${i+1}] ${r.title}\\nURL: ${r.url}\\n${(r.content||'').substring(0,500)}`\n).join('\\n\\n---\\n\\n');\n\nconst systemMsg = `You are a news monitoring agent for Pennsylvania electricity and power outages. Analyze web search results and determine whether they contain CURRENT news (within the last 48 hours) about real power outages or electricity issues in Pennsylvania.\\n\\nIf relevant current news found respond EXACTLY:\\nALERT: YES\\nSUMMARY: <1-2 sentences, max 200 characters>\\nURL: <most relevant URL>\\n\\nIf none respond EXACTLY:\\nALERT: NO\\nREASON: <one-line explanation>`;\n\nlet aiResponse = '';\ntry {\n  const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: OPENAI_MODEL,\n      messages: [{ role: 'system', content: systemMsg }, { role: 'user', content: `Search: \"${prompt}\"\\n\\nAnswer: ${answer}\\n\\nResults:\\n${resultsText}` }],\n      max_tokens: 350, temperature: 0.1\n    })\n  });\n  const aiData = await openaiRes.json();\n  aiResponse = aiData.choices?.[0]?.message?.content?.trim() || '';\n} catch (e) {\n  await updateStatus({ sent: false, error: 'OpenAI failed: ' + e.message });\n  return [{ json: { shouldAlert: false, reason: 'OpenAI error: ' + e.message, smsTo } }];\n}\n\n// STEP 4 — Parse response\nconst shouldAlert  = aiResponse.includes('ALERT: YES');\nconst summary = (aiResponse.match(/SUMMARY:\\s*(.+?)(?:\\n|$)/)?.[1] || 'Power outage news found in Pennsylvania').trim();\nconst url     = (aiResponse.match(/URL:\\s*(.+?)(?:\\n|$)/)?.[1]     || results[0]?.url || '').trim();\n\nconsole.log(`shouldAlert=${shouldAlert} | ${summary.substring(0,60)}`);\nif (!shouldAlert) await updateStatus({ sent: false, summary: 'No relevant current news' });\n\nreturn [{ json: { shouldAlert, summary, url, aiResponse, resultCount: results.length, prompt, smsTo, timestamp: new Date().toISOString() } }];\n\nasync function updateStatus(payload) {\n  for (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n    try {\n      await fetch(`${base}/api/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });\n      return;\n    } catch (_) {}\n  }\n}"
+      }
+    },
+    {
+      "id": "node-if-004",
+      "name": "Should Send Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [760, 360],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-should-alert",
+              "leftValue": "={{ $json.shouldAlert }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-sms-005",
+      "name": "Send WhatsApp Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 260],
+      "parameters": {
+        "jsCode": "// ── Send WhatsApp via CallMeBot ─────────────────────────────────────────\n// Credentials are stored in config.json and read via the frontend server.\n// No $env needed — edit them at http://localhost:3200\n\nconst CONFIG_BASE = 'http://frontend:3200';\n\n// Load config to get CallMeBot credentials\nlet config = {};\ntry {\n  const cfgRes = await fetch(`${CONFIG_BASE}/api/config`);\n  config = await cfgRes.json();\n} catch (e) {\n  try {\n    const cfgRes = await fetch('http://localhost:3200/api/config');\n    config = await cfgRes.json();\n  } catch (_) {}\n}\n\nconst phone  = config.callmebot_phone || '1XXXXXXXXXX';\nconst apiKey = config.callmebot_apikey || '';\n\nconst { summary, url, timestamp } = $input.item.json;\n\nif (!apiKey) {\n  console.warn('⚠️  callmebot_apikey not set in config.json. Add it at http://localhost:3200');\n  await updateStatus({ sent: false, summary, url, error: 'CallMeBot API key not configured' });\n  return [{ json: { sent: false, reason: 'CallMeBot API key missing — set it at http://localhost:3200', summary, url, timestamp } }];\n}\n\n// Detect a PPL county for a county-specific live link\nconst PPL_COUNTIES = ['Adams','Berks','Bradford','Carbon','Centre','Chester','Clinton','Columbia','Cumberland','Dauphin','Lackawanna','Lancaster','Lebanon','Lehigh','Luzerne','Lycoming','Monroe','Montgomery','Montour','Northampton','Northumberland','Pike','Schuylkill','Snyder','Sullivan','Susquehanna','Union','Wayne','Wyoming','York'];\nconst mentioned = PPL_COUNTIES.find(c => new RegExp(`\\\\b${c}\\\\b`, 'i').test(summary));\nconst countyLine = mentioned ? `\\n📍 ${mentioned} County live: https://poweroutage.us/area/county/${mentioned.toLowerCase()}` : '';\n\n// Build message\nconst message = `⚡ PA Power Alert!\\n${summary}\\n\\n📰 ${url}${countyLine}\\n🚨 Live PA outage alerts: https://poweroutage.us/dashboard/alerts`.substring(0, 1500);\nconst encodedMsg = encodeURIComponent(message);\nconst endpoint = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodedMsg}&apikey=${apiKey}`;\n\ntry {\n  const res = await fetch(endpoint);\n  const body = await res.text();\n\n  if (!res.ok || body.toLowerCase().includes('error')) {\n    console.error('CallMeBot error:', body.substring(0, 200));\n    await updateStatus({ sent: false, summary, url, error: body.substring(0, 200) });\n    return [{ json: { sent: false, callmebotError: body.substring(0, 200), summary, url } }];\n  }\n\n  console.log('WhatsApp sent via CallMeBot ✅');\n  await updateStatus({ sent: true, summary, url });\n  return [{ json: { sent: true, to: phone, message, summary, url, timestamp } }];\n\n} catch (e) {\n  console.error('CallMeBot fetch failed:', e.message);\n  await updateStatus({ sent: false, summary, url, error: e.message });\n  return [{ json: { sent: false, error: e.message, summary, url } }];\n}\n\nasync function updateStatus(payload) {\n  for (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n    try {\n      await fetch(`${base}/api/status`, {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify(payload)\n      });\n      return;\n    } catch (_) {}\n  }\n}"
+      }
+    },
+    {
+      "id": "node-noop-006",
+      "name": "Send No Outage Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1020, 480],
+      "parameters": {
+        "jsCode": "// No active outage found — send a 'all clear' WhatsApp notice\n\nlet config = {};\nfor (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n  try {\n    const r = await fetch(`${base}/api/config`);\n    config = await r.json();\n    break;\n  } catch (_) {}\n}\n\nconst phone  = config.callmebot_phone  || '1XXXXXXXXXX';\nconst apiKey = config.callmebot_apikey || '';\n\nif (!apiKey) {\n  console.log('CallMeBot key not set — skipping no-outage notice');\n  return [{ json: { sent: false, reason: 'No CallMeBot key' } }];\n}\n\nconst now     = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst message = encodeURIComponent(`✅ No PPL Electric Utility Outages found.\\nChecked: ${now} ET\\nNext check in 8 hours.`);\nconst endpoint = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${message}&apikey=${apiKey}`;\n\ntry {\n  const res  = await fetch(endpoint);\n  const body = await res.text();\n  if (body.toLowerCase().includes('error')) {\n    console.error('CallMeBot error:', body.substring(0, 200));\n    return [{ json: { sent: false, error: body.substring(0, 200) } }];\n  }\n  console.log('No-outage notice sent ✅');\n\n  // Update status on frontend server\n  for (const base of ['http://frontend:3200', 'http://localhost:3200']) {\n    try {\n      await fetch(`${base}/api/status`, {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({ sent: false, summary: 'No PPL Electric Utility Outages found' })\n      });\n      break;\n    } catch (_) {}\n  }\n\n  return [{ json: { sent: true, notice: 'no_outage', timestamp: new Date().toISOString() } }];\n\n} catch (e) {\n  console.error('Fetch failed:', e.message);\n  return [{ json: { sent: false, error: e.message } }];\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Every 8 Hours": {
+      "main": [
+        [
+          { "node": "Search & Analyze", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          { "node": "Search & Analyze", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Search & Analyze": {
+      "main": [
+        [
+          { "node": "Should Send Alert?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Should Send Alert?": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Alert", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Send No Outage Notice", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "pa-power-outage-alert-v1"
+  }
+}

@@ -1,0 +1,93 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# PA Power Outage News Alert
+#
+#  docker compose up -d           → start everything
+#  docker compose logs -f         → watch logs
+#  docker compose down            → stop (keeps volumes)
+#  docker compose down -v         → stop + wipe n8n data
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── 1. Prompt-editor frontend + config API ──────────────────────────────────
+  frontend:
+    build: .
+    container_name: news-alert-frontend
+    restart: unless-stopped
+    ports:
+      - "3200:3200"
+    volumes:
+      # bind-mount config so edits from the UI survive container restarts
+      - ./config.json:/app/config.json
+      # bind-mount logs directory so search history survives rebuilds + is inspectable on host
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    networks:
+      - news-alert-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3200/api/config >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── 2. n8n workflow engine ───────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: news-alert-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflow.json:/data/workflow.json:ro
+      - ./workflow-test-whatsapp.json:/data/workflow-test-whatsapp.json:ro
+    environment:
+      # ── n8n settings ──
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_USER_MANAGEMENT_DISABLED=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - WEBHOOK_URL=http://localhost:5678
+      # ── custom: tells workflow Code nodes where the config server lives ──
+      - N8N_CONFIG_SERVER_URL=http://frontend:3200
+      # ── All credentials come from config.json (edit at http://localhost:3200) ──
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - news-alert-net
+
+  # ── 3. One-shot init: import the workflow into n8n on first boot ─────────────
+  n8n-import:
+    image: n8nio/n8n:latest
+    container_name: news-alert-n8n-import
+    # runs once, then exits — docker compose will not restart it
+    restart: "no"
+    command: >
+      sh -c "
+        /usr/local/lib/node_modules/n8n/bin/n8n import:workflow --input=/data/workflow.json &&
+        /usr/local/lib/node_modules/n8n/bin/n8n import:workflow --input=/data/workflow-test-whatsapp.json &&
+        echo '✅ Both workflows imported.'
+      "
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflow.json:/data/workflow.json:ro
+      - ./workflow-test-whatsapp.json:/data/workflow-test-whatsapp.json:ro
+    depends_on:
+      n8n:
+        condition: service_healthy
+    networks:
+      - news-alert-net
+
+networks:
+  news-alert-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    name: news-alert-n8n-data
