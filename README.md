@@ -13,7 +13,39 @@ verifies the data is current, and sends a WhatsApp alert via CallMeBot.
 
 ---
 
-## Architecture
+## n8n Workflow
+
+The scheduled workflow that gets imported into n8n on first boot (`workflow.json`):
+
+```mermaid
+flowchart LR
+    A([⏰ Every 8 Hours<br/>Schedule Trigger]):::trigger --> C
+    B([🌐 Manual Trigger<br/>Webhook /run-news-alert]):::trigger --> C
+
+    C[🔍 Search &amp; Analyze<br/><i>Code Node</i><br/>━━━━━━━━━━━━━━━━━━━<br/>1. Load config from frontend:3200<br/>2. Tavily search<br/>   • 27 PPL-area domains<br/>   • topic:news, days:1<br/>3. Filter previous-year results<br/>4. OpenAI gpt-4o-mini analysis<br/>   ALERT: YES/NO + summary]:::analyze
+
+    C --> D{🤔 Should Send<br/>Alert?<br/><i>IF Node</i>}:::decision
+
+    D -- ALERT: YES --> E[📲 Send WhatsApp Alert<br/><i>Code Node</i><br/>━━━━━━━━━━━━━━━━━━━<br/>⚡ PA Power Alert!<br/>📰 Article URL<br/>📍 County-specific live link<br/>🚨 PowerOutage.us dashboard<br/>via CallMeBot API]:::alert
+
+    D -- ALERT: NO --> F[ℹ️ Send No-Outage Notice<br/><i>Code Node</i><br/>━━━━━━━━━━━━━━━━━━━<br/>✅ No PPL Electric Utility<br/>Outages found<br/>Next check in 8 hours<br/>via CallMeBot API]:::clear
+
+    E --> G[(📜 Update<br/>/api/status<br/>frontend:3200)]:::sink
+    F --> G
+
+    classDef trigger fill:#1e3a8a,stroke:#3b82f6,color:#fff,stroke-width:2px
+    classDef analyze fill:#7c2d12,stroke:#f97316,color:#fff,stroke-width:2px,text-align:left
+    classDef decision fill:#713f12,stroke:#eab308,color:#fff,stroke-width:2px
+    classDef alert fill:#14532d,stroke:#22c55e,color:#fff,stroke-width:2px,text-align:left
+    classDef clear fill:#374151,stroke:#9ca3af,color:#fff,stroke-width:2px,text-align:left
+    classDef sink fill:#581c87,stroke:#a855f7,color:#fff,stroke-width:2px
+```
+
+> The same pipeline is also exposed at **`POST /api/test-full-run`** on the Express server, which is what the dashboard's ▶ Run Now button calls — no n8n required for manual testing.
+
+---
+
+## System Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
